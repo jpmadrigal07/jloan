@@ -1,1 +1,1 @@
-# JLoan
+# JLoan - A Loan Management System
