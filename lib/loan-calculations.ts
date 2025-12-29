@@ -213,6 +213,147 @@ export function distributeBudgetAcrossLoans(
 }
 
 /**
+ * Simulate loan payoff with rollover payments
+ * This properly accounts for when loans are paid off and their payments roll to other loans
+ */
+function simulateLoanPayoff(
+  loans: Loan[],
+  monthlyAllocation: number,
+  strategyType: 'snowball' | 'avalanche' | 'custom' | null
+): {
+  projections: PaymentProjection[];
+  totalMonths: number;
+  totalInterest: number;
+} {
+  // Create working copies of loans with current balances
+  const workingLoans = loans.map((loan) => ({
+    id: loan.id,
+    currentBalance: Number(loan.currentBalance),
+    minimumPayment: Number(loan.minimumPayment),
+    interestRate: Number(loan.interestRate),
+    startDate: new Date(loan.startDate),
+    priorityOrder: loan.priorityOrder ?? 999,
+  }));
+
+  const projections: PaymentProjection[] = workingLoans.map((loan) => ({
+    loanId: loan.id,
+    monthlyPayment: loan.minimumPayment,
+    monthsToPayoff: 0,
+    totalInterest: 0,
+    payoffDate: loan.startDate,
+  }));
+
+  let month = 0;
+  const maxMonths = 600; // 50 years max
+  let totalInterestPaid = 0;
+  const monthlyRateCache: Record<number, number> = {};
+
+  // Pre-calculate monthly rates
+  workingLoans.forEach((loan) => {
+    monthlyRateCache[loan.id] = calculateMonthlyRate(loan.interestRate);
+  });
+
+  while (workingLoans.length > 0 && month < maxMonths) {
+    // Determine how to allocate payments this month
+    let availableFunds = monthlyAllocation;
+    const paymentsThisMonth: Record<number, number> = {};
+
+    // Start with minimum payments for all active loans
+    workingLoans.forEach((loan) => {
+      paymentsThisMonth[loan.id] = loan.minimumPayment;
+      availableFunds -= loan.minimumPayment;
+    });
+
+    // If we have extra funds and a strategy, distribute them
+    if (availableFunds > 0.01 && strategyType) {
+      // Sort loans based on strategy
+      let sortedLoans = [...workingLoans];
+      if (strategyType === 'snowball') {
+        sortedLoans.sort((a, b) => a.currentBalance - b.currentBalance);
+      } else if (strategyType === 'avalanche') {
+        sortedLoans.sort((a, b) => b.interestRate - a.interestRate);
+      } else {
+        // custom - sort by priority_order
+        sortedLoans.sort((a, b) => a.priorityOrder - b.priorityOrder);
+      }
+
+      // Distribute extra funds
+      for (const loan of sortedLoans) {
+        if (availableFunds <= 0.01) break;
+
+        const monthlyRate = monthlyRateCache[loan.id];
+        const interest = loan.currentBalance * monthlyRate;
+        const currentPayment = paymentsThisMonth[loan.id];
+        const currentPrincipal = Math.max(0, currentPayment - interest);
+        const maxPrincipal = loan.currentBalance;
+        const remainingCapacity = maxPrincipal - currentPrincipal;
+
+        if (remainingCapacity > 0.01) {
+          const additionalPayment = Math.min(availableFunds, remainingCapacity);
+          paymentsThisMonth[loan.id] += additionalPayment;
+          availableFunds -= additionalPayment;
+        }
+      }
+    }
+
+    // Apply payments and interest for this month
+    const paidOffLoans: number[] = [];
+
+    for (const loan of workingLoans) {
+      const payment = paymentsThisMonth[loan.id] || 0;
+      const monthlyRate = monthlyRateCache[loan.id];
+      const interest = loan.currentBalance * monthlyRate;
+      const principal = Math.min(loan.currentBalance, Math.max(0, payment - interest));
+
+      totalInterestPaid += interest;
+      loan.currentBalance = Math.max(0, loan.currentBalance - principal);
+
+      // Update projection totals
+      const projection = projections.find((p) => p.loanId === loan.id);
+      if (projection) {
+        projection.totalInterest += interest;
+        projection.monthlyPayment = Math.max(projection.monthlyPayment, payment);
+      }
+
+      // Check if loan is paid off
+      if (loan.currentBalance <= 0.01) {
+        paidOffLoans.push(loan.id);
+        if (projection) {
+          projection.monthsToPayoff = month + 1;
+          projection.payoffDate = new Date(loan.startDate);
+          projection.payoffDate.setMonth(projection.payoffDate.getMonth() + month + 1);
+        }
+      }
+    }
+
+    // Remove paid off loans (their payments will naturally roll to remaining loans)
+    workingLoans.splice(0, workingLoans.length, ...workingLoans.filter(
+      (loan) => !paidOffLoans.includes(loan.id)
+    ));
+
+    month++;
+  }
+
+  // Set remaining loans to max months if they weren't paid off
+  workingLoans.forEach((loan) => {
+    const projection = projections.find((p) => p.loanId === loan.id);
+    if (projection && projection.monthsToPayoff === 0) {
+      projection.monthsToPayoff = month;
+      projection.payoffDate = new Date(loan.startDate);
+      projection.payoffDate.setMonth(projection.payoffDate.getMonth() + month);
+    }
+  });
+
+  const totalMonths = Math.max(...projections.map((p) => p.monthsToPayoff), 0);
+
+  return {
+    projections,
+    totalMonths,
+    totalInterest: Math.round(totalInterestPaid * 100) / 100,
+  };
+}
+
+/**
  * Calculate strategy projections
  */
 export function calculateStrategyProjections(
@@ -221,94 +362,29 @@ export function calculateStrategyProjections(
   strategyType: 'snowball' | 'avalanche' | 'custom' | null
 ): StrategyProjection {
   const activeLoans = loans.filter((loan) => loan.isActive);
+  const monthlyObligation = calculateMonthlyObligation(activeLoans);
   const monthlyAllocation = monthlyBudget
     ? Number(monthlyBudget.monthlyAllocation)
-    : calculateMonthlyObligation(activeLoans);
+    : monthlyObligation;
 
-  // Calculate minimum payment scenario
-  const minPaymentsProjections: PaymentProjection[] = activeLoans.map(
-    (loan) => {
-      const startDate = new Date(loan.startDate);
-      const payoffDate = calculatePayoffDate(
-        Number(loan.currentBalance),
-        Number(loan.minimumPayment),
-        Number(loan.interestRate),
-        startDate
-      );
-      const monthsToPayoff = Math.max(
-        1,
-        Math.ceil(
-          (payoffDate.getTime() - startDate.getTime()) /
-            (30.44 * 24 * 60 * 60 * 1000)
-        )
-      );
-      const totalInterest = calculateTotalInterest(
-        Number(loan.currentBalance),
-        Number(loan.minimumPayment),
-        Number(loan.interestRate)
-      );
-
-      return {
-        loanId: loan.id,
-        monthlyPayment: Number(loan.minimumPayment),
-        monthsToPayoff,
-        totalInterest,
-        payoffDate,
-      };
-    }
+  // Calculate minimum payment scenario (no strategy, just minimums with rollover)
+  // Always use only the sum of minimum payments, regardless of budget
+  const minPaymentSimulation = simulateLoanPayoff(
+    activeLoans,
+    monthlyObligation, // Always use minimum payments only
+    null // No strategy for minimum payment scenario
   );
 
-  const minTotalMonths = Math.max(
-    ...minPaymentsProjections.map((p) => p.monthsToPayoff),
-    0
-  );
-  const minTotalInterest = minPaymentsProjections.reduce(
-    (sum, p) => sum + p.totalInterest,
-    0
-  );
+  // Calculate strategy scenario (uses budget if available)
+  const strategySimulation = strategyType
+    ? simulateLoanPayoff(activeLoans, monthlyAllocation, strategyType)
+    : minPaymentSimulation;
 
-  // Calculate strategy scenario
+  // Calculate allocations for display (initial allocation, not accounting for rollover)
   const allocations = distributeBudgetAcrossLoans(
     activeLoans,
     monthlyAllocation,
     strategyType
-  );
-
-  const strategyProjections: PaymentProjection[] = activeLoans.map((loan) => {
-    const monthlyPayment = allocations[loan.id] || Number(loan.minimumPayment);
-    const startDate = new Date(loan.startDate);
-    const payoffDate = calculatePayoffDate(
-      Number(loan.currentBalance),
-      monthlyPayment,
-      Number(loan.interestRate),
-      startDate
-    );
-    const monthsToPayoff = Math.ceil(
-      (payoffDate.getTime() - startDate.getTime()) /
-        (30 * 24 * 60 * 60 * 1000)
-    );
-    const totalInterest = calculateTotalInterest(
-      Number(loan.currentBalance),
-      monthlyPayment,
-      Number(loan.interestRate)
-    );
-
-    return {
-      loanId: loan.id,
-      monthlyPayment,
-      monthsToPayoff,
-      totalInterest,
-      payoffDate,
-    };
-  });
-
-  const strategyTotalMonths = Math.max(
-    ...strategyProjections.map((p) => p.monthsToPayoff),
-    0
-  );
-  const strategyTotalInterest = strategyProjections.reduce(
-    (sum, p) => sum + p.totalInterest,
-    0
   );
 
   const extraPaymentAllocations: Record<number, number> = {};
@@ -323,11 +399,11 @@ export function calculateStrategyProjections(
   });
 
   return {
-    loans: strategyProjections,
-    totalMonths: strategyTotalMonths,
-    totalInterest: strategyTotalInterest,
-    interestSavings: minTotalInterest - strategyTotalInterest,
-    timeSavings: minTotalMonths - strategyTotalMonths,
+    loans: strategySimulation.projections,
+    totalMonths: strategySimulation.totalMonths,
+    totalInterest: strategySimulation.totalInterest,
+    interestSavings: minPaymentSimulation.totalInterest - strategySimulation.totalInterest,
+    timeSavings: minPaymentSimulation.totalMonths - strategySimulation.totalMonths,
     extraPaymentAllocations,
   };
 }
