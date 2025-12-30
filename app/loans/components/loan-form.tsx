@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createLoanSchema, type LoanInput } from '@/lib/validations/loan-schema';
 import { Button } from '@/components/ui/button';
 import {
@@ -87,8 +88,11 @@ export function LoanForm({ loan, open, onSuccess, onCancel }: LoanFormProps) {
     }
   }, [loan, form]);
 
-  async function onSubmit(data: LoanInput) {
-    try {
+  const queryClient = useQueryClient();
+
+  // Create/Update mutation
+  const saveMutation = useMutation({
+    mutationFn: async (data: LoanInput) => {
       const url = loan ? `/api/loans/${loan.id}` : '/api/loans';
       const method = loan ? 'PUT' : 'POST';
 
@@ -100,17 +104,36 @@ export function LoanForm({ loan, open, onSuccess, onCancel }: LoanFormProps) {
         body: JSON.stringify(data),
       });
 
-      if (response.ok) {
-        onSuccess();
-      } else {
+      if (!response.ok) {
         const error = await response.json();
-        console.error('Error saving loan:', error);
-        alert('Failed to save loan. Please try again.');
+        throw new Error(error.error || 'Failed to save loan');
       }
-    } catch (error) {
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch loans (this will match ['loans', { isActive: true }] and all loan queries)
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      // Invalidate budget queries (for summary cards)
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      // Invalidate all payment queries (this will match ['payments'], ['payments', { status: 'overdue' }], etc.)
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      // Invalidate computed extra allocations (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['payments', 'extra-allocations'] });
+      // Invalidate strategy queries (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'strategy'] });
+      // Invalidate all projection queries (this will match ['loans', 'projections', { strategyType }] for any strategyType)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'projections'] });
+      onSuccess();
+    },
+    onError: (error: Error) => {
       console.error('Error saving loan:', error);
-      alert('Failed to save loan. Please try again.');
-    }
+      alert(error.message || 'Failed to save loan. Please try again.');
+    },
+  });
+
+  async function onSubmit(data: LoanInput) {
+    saveMutation.mutate(data);
   }
 
   return (

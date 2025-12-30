@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBudgetSchema, type BudgetInput } from '@/lib/validations/budget-schema';
 import {
   Card,
@@ -32,11 +33,37 @@ import type { MonthlyBudget } from '@/lib/db/schema';
 import { calculateMonthlyObligation } from '@/lib/loan-calculations';
 import type { Loan } from '@/lib/db/schema';
 
+// Query functions
+async function fetchBudget(): Promise<MonthlyBudget | null> {
+  const response = await fetch('/api/budget?active=true');
+  if (!response.ok) return null;
+  return response.json();
+}
+
+async function fetchLoans(): Promise<Loan[]> {
+  const response = await fetch('/api/loans?is_active=true');
+  if (!response.ok) throw new Error('Failed to fetch loans');
+  return response.json();
+}
+
 export function BudgetManager() {
-  const [budget, setBudget] = useState<MonthlyBudget | null>(null);
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+
+  // Fetch budget and loans with TanStack Query
+  const { data: budget = null, isLoading: budgetLoading } = useQuery({
+    queryKey: ['budget', { active: true }],
+    queryFn: fetchBudget,
+    staleTime: 60 * 1000, // 1 minute
+  });
+
+  const { data: loans = [], isLoading: loansLoading } = useQuery({
+    queryKey: ['loans', { isActive: true }],
+    queryFn: fetchLoans,
+    staleTime: 60 * 1000, // 1 minute
+  });
+
+  const loading = budgetLoading || loansLoading;
 
   const form = useForm<BudgetInput>({
     resolver: zodResolver(createBudgetSchema),
@@ -48,45 +75,21 @@ export function BudgetManager() {
     },
   });
 
+  // Reset form when budget data changes
   useEffect(() => {
-    fetchBudget();
-    fetchLoans();
-  }, []);
-
-  async function fetchBudget() {
-    try {
-      const response = await fetch('/api/budget?active=true');
-      if (response.ok) {
-        const data = await response.json();
-        setBudget(data);
-        if (data) {
-          form.reset({
-            monthlyAllocation: Number(data.monthlyAllocation),
-            effectiveDate: data.effectiveDate,
-            isActive: data.isActive,
-            notes: data.notes ?? '',
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching budget:', error);
-    } finally {
-      setLoading(false);
+    if (budget) {
+      form.reset({
+        monthlyAllocation: Number(budget.monthlyAllocation),
+        effectiveDate: budget.effectiveDate,
+        isActive: budget.isActive,
+        notes: budget.notes ?? '',
+      });
     }
-  }
+  }, [budget, form]);
 
-  async function fetchLoans() {
-    try {
-      const response = await fetch('/api/loans?is_active=true');
-      const data = await response.json();
-      setLoans(data);
-    } catch (error) {
-      console.error('Error fetching loans:', error);
-    }
-  }
-
-  async function onSubmit(data: BudgetInput) {
-    try {
+  // Save budget mutation
+  const saveBudgetMutation = useMutation({
+    mutationFn: async (data: BudgetInput) => {
       const response = await fetch('/api/budget', {
         method: 'POST',
         headers: {
@@ -95,22 +98,40 @@ export function BudgetManager() {
         body: JSON.stringify(data),
       });
 
-      if (response.ok) {
-        setShowForm(false);
-        await fetchBudget();
-        // Small delay to ensure database transaction is committed
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        // Dispatch custom event to notify other components (e.g., projections panel)
-        window.dispatchEvent(new CustomEvent('budget-updated'));
-      } else {
+      if (!response.ok) {
         const error = await response.json();
-        console.error('Error saving budget:', error);
-        alert('Failed to save budget. Please try again.');
+        throw new Error(error.error || 'Failed to save budget');
       }
-    } catch (error) {
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch budget (this will match ['budget', { active: true }] and all budget queries)
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      // Invalidate loan queries (for summary cards and calculations)
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      // Invalidate all payment queries (this will match ['payments'], ['payments', { status: 'overdue' }], etc.)
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      // Invalidate computed extra allocations (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['payments', 'extra-allocations'] });
+      // Invalidate strategy queries (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'strategy'] });
+      // Invalidate all projection queries (this will match ['loans', 'projections', { strategyType }] for any strategyType)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'projections'] });
+      
+      setShowForm(false);
+      
+      // Dispatch custom event for backward compatibility with other components
+      window.dispatchEvent(new CustomEvent('budget-updated'));
+    },
+    onError: (error: Error) => {
       console.error('Error saving budget:', error);
-      alert('Failed to save budget. Please try again.');
-    }
+      alert(error.message || 'Failed to save budget. Please try again.');
+    },
+  });
+
+  async function onSubmit(data: BudgetInput) {
+    saveBudgetMutation.mutate(data);
   }
 
   const formatCurrency = (amount: number) => {

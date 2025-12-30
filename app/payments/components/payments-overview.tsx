@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -54,65 +55,75 @@ interface PaymentModalData {
   extraAllocation: number;
 }
 
+// Query functions
+async function fetchPayments(): Promise<Payment[]> {
+  const response = await fetch('/api/payments');
+  if (!response.ok) {
+    throw new Error('Failed to fetch payments');
+  }
+  return response.json();
+}
+
+async function fetchExtraPaymentAllocations(): Promise<Record<number, number>> {
+  // Fetch loans, budget, and strategy
+  const [loansRes, budgetRes] = await Promise.all([
+    fetch('/api/loans?is_active=true'),
+    fetch('/api/budget?active=true'),
+  ]);
+
+  if (!loansRes.ok) {
+    throw new Error('Failed to fetch loans');
+  }
+
+  const loans: Loan[] = await loansRes.json();
+  const budget: MonthlyBudget | null = budgetRes.ok
+    ? await budgetRes.json()
+    : null;
+
+  // Get strategy type from first loan (assuming all loans have same strategy)
+  const strategyType =
+    loans.length > 0 && loans[0].strategyType
+      ? (loans[0].strategyType as 'snowball' | 'avalanche' | 'custom')
+      : null;
+
+  // Calculate extra payment allocations
+  const projections = calculateStrategyProjections(
+    loans,
+    budget,
+    strategyType
+  );
+
+  return projections.extraPaymentAllocations;
+}
+
 export function PaymentsOverview() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [extraPaymentAllocations, setExtraPaymentAllocations] = useState<
-    Record<number, number>
-  >({});
+  const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<PaymentModalData | null>(null);
 
-  useEffect(() => {
-    fetchPayments();
-    fetchExtraPaymentAllocations();
-  }, []);
+  // Fetch payments with TanStack Query
+  const {
+    data: payments = [],
+    isLoading: paymentsLoading,
+    error: paymentsError,
+  } = useQuery({
+    queryKey: ['payments'],
+    queryFn: fetchPayments,
+    staleTime: 60 * 1000, // 1 minute
+  });
 
-  async function fetchPayments() {
-    try {
-      const response = await fetch('/api/payments');
-      if (response.ok) {
-        const data = await response.json();
-        setPayments(data);
-      }
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Fetch extra payment allocations with TanStack Query
+  const {
+    data: extraPaymentAllocations = {},
+    isLoading: allocationsLoading,
+    error: allocationsError,
+  } = useQuery({
+    queryKey: ['payments', 'extra-allocations'],
+    queryFn: fetchExtraPaymentAllocations,
+    staleTime: 60 * 1000, // 1 minute
+  });
 
-  async function fetchExtraPaymentAllocations() {
-    try {
-      // Fetch loans, budget, and strategy
-      const [loansRes, budgetRes] = await Promise.all([
-        fetch('/api/loans?is_active=true'),
-        fetch('/api/budget?active=true'),
-      ]);
-
-      const loans: Loan[] = await loansRes.json();
-      const budget: MonthlyBudget | null = budgetRes.ok
-        ? await budgetRes.json()
-        : null;
-
-      // Get strategy type from first loan (assuming all loans have same strategy)
-      const strategyType =
-        loans.length > 0 && loans[0].strategyType
-          ? (loans[0].strategyType as 'snowball' | 'avalanche' | 'custom')
-          : null;
-
-      // Calculate extra payment allocations
-      const projections = calculateStrategyProjections(
-        loans,
-        budget,
-        strategyType
-      );
-
-      setExtraPaymentAllocations(projections.extraPaymentAllocations);
-    } catch (error) {
-      console.error('Error fetching extra payment allocations:', error);
-    }
-  }
+  const loading = paymentsLoading || allocationsLoading;
 
   function handleMarkPaidClick(
     paymentId: number,
@@ -140,12 +151,18 @@ export function PaymentsOverview() {
     setModalOpen(true);
   }
 
-  async function handleMarkPaid(paymentId: number, amountPaid: number) {
-    try {
+  // Mutation for marking payment as paid
+  const markPaidMutation = useMutation({
+    mutationFn: async ({
+      paymentId,
+      amountPaid,
+    }: {
+      paymentId: number;
+      amountPaid: number;
+    }) => {
       // Validate the amount
       if (isNaN(amountPaid) || amountPaid <= 0) {
-        alert('Invalid payment amount. Please try again.');
-        return;
+        throw new Error('Invalid payment amount. Please try again.');
       }
 
       const response = await fetch(`/api/payments/${paymentId}`, {
@@ -160,22 +177,37 @@ export function PaymentsOverview() {
         }),
       });
 
-      if (response.ok) {
-        fetchPayments();
-        fetchExtraPaymentAllocations();
-        // Refresh loans to update balances
-        window.location.reload();
-      } else {
+      if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Error marking payment as paid:', errorData);
-        alert(
+        throw new Error(
           errorData.error || 'Failed to mark payment as paid. Please try again.'
         );
       }
-    } catch (error) {
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate all payment queries (this will match ['payments'], ['payments', { status: 'overdue' }], etc.)
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      // Invalidate computed extra allocations (depends on loans and budget, may have changed due to balance update)
+      queryClient.invalidateQueries({ queryKey: ['payments', 'extra-allocations'] });
+      // Invalidate loan queries (loan balance was updated when payment was marked as paid)
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      // Invalidate budget queries (for summary cards)
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      // Invalidate strategy queries (depends on loans, may have changed due to balance update)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'strategy'] });
+      // Invalidate all projection queries (this will match ['loans', 'projections', { strategyType }] for any strategyType)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'projections'] });
+    },
+    onError: (error: Error) => {
       console.error('Error marking payment as paid:', error);
-      alert('Failed to mark payment as paid. Please try again.');
-    }
+      alert(error.message || 'Failed to mark payment as paid. Please try again.');
+    },
+  });
+
+  async function handleMarkPaid(paymentId: number, amountPaid: number) {
+    markPaidMutation.mutate({ paymentId, amountPaid });
   }
 
   function handleModalConfirm(includeExtra: boolean) {
@@ -227,6 +259,25 @@ export function PaymentsOverview() {
         </CardHeader>
         <CardContent>
           <div className="h-64 bg-muted animate-pulse rounded" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (paymentsError || allocationsError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Upcoming Payments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-destructive">
+            {paymentsError instanceof Error
+              ? paymentsError.message
+              : allocationsError instanceof Error
+                ? allocationsError.message
+                : 'Failed to load payments. Please try again.'}
+          </div>
         </CardContent>
       </Card>
     );
@@ -291,9 +342,10 @@ export function PaymentsOverview() {
                               minimumPayment
                             )
                           }
+                          disabled={markPaidMutation.isPending}
                         >
                           <Check className="h-4 w-4 mr-1" />
-                          Mark Paid
+                          {markPaidMutation.isPending ? 'Processing...' : 'Mark Paid'}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -367,9 +419,10 @@ export function PaymentsOverview() {
                               minimumPayment
                             )
                           }
+                          disabled={markPaidMutation.isPending}
                         >
                           <Check className="h-4 w-4 mr-1" />
-                          Mark Paid
+                          {markPaidMutation.isPending ? 'Processing...' : 'Mark Paid'}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -434,14 +487,16 @@ export function PaymentsOverview() {
               variant="outline"
               onClick={() => handleModalConfirm(false)}
               className="w-full sm:w-auto"
+              disabled={markPaidMutation.isPending}
             >
               No (Minimum Only)
             </Button>
             <Button
               onClick={() => handleModalConfirm(true)}
               className="w-full sm:w-auto"
+              disabled={markPaidMutation.isPending}
             >
-              Yes (Minimum + Extra)
+              {markPaidMutation.isPending ? 'Processing...' : 'Yes (Minimum + Extra)'}
             </Button>
           </DialogFooter>
         </DialogContent>

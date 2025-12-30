@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Table,
   TableBody,
@@ -15,44 +16,57 @@ import type { Loan } from '@/lib/db/schema';
 import { LoanForm } from './loan-form';
 import { Edit, Trash2 } from 'lucide-react';
 
+// Query function
+async function fetchLoans(): Promise<Loan[]> {
+  const response = await fetch('/api/loans?is_active=true');
+  if (!response.ok) throw new Error('Failed to fetch loans');
+  return response.json();
+}
+
+// Mutation function
+async function deleteLoan(loanId: number): Promise<void> {
+  const response = await fetch(`/api/loans/${loanId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to delete loan');
+}
+
 export function LoansTable() {
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [showForm, setShowForm] = useState(false);
 
-  useEffect(() => {
-    fetchLoans();
-  }, []);
+  // Fetch loans with TanStack Query
+  const { data: loans = [], isLoading: loading } = useQuery({
+    queryKey: ['loans', { isActive: true }],
+    queryFn: fetchLoans,
+    staleTime: 60 * 1000, // 1 minute
+  });
 
-  async function fetchLoans() {
-    try {
-      const response = await fetch('/api/loans?is_active=true');
-      const data = await response.json();
-      setLoans(data);
-    } catch (error) {
-      console.error('Error fetching loans:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: deleteLoan,
+    onSuccess: () => {
+      // Invalidate and refetch loans (this will match ['loans', { isActive: true }] and all loan queries)
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      // Invalidate budget queries (for summary cards)
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      // Invalidate all payment queries (this will match ['payments'], ['payments', { status: 'overdue' }], etc.)
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      // Invalidate computed extra allocations (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['payments', 'extra-allocations'] });
+      // Invalidate strategy queries (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'strategy'] });
+      // Invalidate all projection queries (this will match ['loans', 'projections', { strategyType }] for any strategyType)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'projections'] });
+    },
+  });
 
   async function handleDelete(loanId: number) {
     if (!confirm('Are you sure you want to delete this loan?')) {
       return;
     }
-
-    try {
-      const response = await fetch(`/api/loans/${loanId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        fetchLoans();
-      }
-    } catch (error) {
-      console.error('Error deleting loan:', error);
-    }
+    deleteMutation.mutate(loanId);
   }
 
   function handleEdit(loan: Loan) {
@@ -63,7 +77,7 @@ export function LoansTable() {
   function handleFormSuccess() {
     setShowForm(false);
     setEditingLoan(null);
-    fetchLoans();
+    // Queries will be invalidated by the mutation in LoanForm
   }
 
   const formatCurrency = (amount: number | string) => {

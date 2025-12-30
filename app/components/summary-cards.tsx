@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { calculateMonthlyObligation, calculateAvailableExtraFunds } from '@/lib/loan-calculations';
 import type { Loan, MonthlyBudget } from '@/lib/db/schema';
@@ -15,87 +16,66 @@ interface SummaryData {
   totalInterest: number;
 }
 
+// Query functions
+async function fetchLoans(): Promise<Loan[]> {
+  const res = await fetch('/api/loans?is_active=true');
+  if (!res.ok) throw new Error('Failed to fetch loans');
+  return res.json();
+}
+
+async function fetchBudget(): Promise<MonthlyBudget | null> {
+  const res = await fetch('/api/budget?active=true');
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function fetchOverduePayments(): Promise<unknown[]> {
+  const res = await fetch('/api/payments?status=overdue');
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export function SummaryCards() {
-  const [summary, setSummary] = useState<SummaryData>({
-    totalDebt: 0,
-    monthlyObligation: 0,
-    monthlyBudget: 0,
-    availableExtraFunds: 0,
-    nextPaymentDue: null,
-    overdueCount: 0,
-    totalInterest: 0,
+  const queryClient = useQueryClient();
+
+  // Fetch all data in parallel with TanStack Query
+  const queries = useQueries({
+    queries: [
+      {
+        queryKey: ['loans', { isActive: true }],
+        queryFn: fetchLoans,
+        staleTime: 60 * 1000, // 1 minute
+      },
+      {
+        queryKey: ['budget', { active: true }],
+        queryFn: fetchBudget,
+        staleTime: 60 * 1000, // 1 minute
+      },
+      {
+        queryKey: ['payments', { status: 'overdue' }],
+        queryFn: fetchOverduePayments,
+        staleTime: 60 * 1000, // 1 minute
+      },
+    ],
   });
-  const [loading, setLoading] = useState(true);
 
+  const [loansQuery, budgetQuery, paymentsQuery] = queries;
+
+  // Listen for budget updates and invalidate queries
   useEffect(() => {
-    async function fetchSummary() {
-      try {
-        const [loansRes, budgetRes, paymentsRes] = await Promise.all([
-          fetch('/api/loans?is_active=true'),
-          fetch('/api/budget?active=true'),
-          fetch('/api/payments?status=overdue'),
-        ]);
-
-        const loans: Loan[] = await loansRes.json();
-        const budget: MonthlyBudget | null = budgetRes.ok
-          ? await budgetRes.json()
-          : null;
-        const overduePayments = paymentsRes.ok ? await paymentsRes.json() : [];
-
-        const totalDebt = loans.reduce(
-          (sum, loan) => sum + Number(loan.currentBalance),
-          0
-        );
-        const monthlyObligation = calculateMonthlyObligation(loans);
-        const monthlyBudgetAmount = budget
-          ? Number(budget.monthlyAllocation)
-          : 0;
-        const availableExtraFunds = calculateAvailableExtraFunds(
-          monthlyBudgetAmount,
-          loans
-        );
-
-        // Find next payment due
-        const upcomingPayments = loans
-          .map((loan) => ({
-            date: loan.nextPaymentDueDate,
-            status: loan.paymentStatus,
-          }))
-          .filter((p) => p.status !== 'overdue')
-          .sort((a, b) => (a.date > b.date ? 1 : -1));
-
-        const nextPaymentDue =
-          upcomingPayments.length > 0 ? upcomingPayments[0].date : null;
-
-        // Calculate total interest (simplified - would need full calculation)
-        const totalInterest = loans.reduce(
-          (sum, loan) =>
-            sum +
-            (Number(loan.currentBalance) * Number(loan.interestRate)) / 100,
-          0
-        );
-
-        setSummary({
-          totalDebt,
-          monthlyObligation,
-          monthlyBudget: monthlyBudgetAmount,
-          availableExtraFunds,
-          nextPaymentDue,
-          overdueCount: overduePayments.length,
-          totalInterest,
-        });
-      } catch (error) {
-        console.error('Error fetching summary:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchSummary();
-
-    // Listen for budget updates
     const handleBudgetUpdate = () => {
-      fetchSummary();
+      // Invalidate budget queries (this will match ['budget', { active: true }] and all budget queries)
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      // Invalidate loan queries
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      // Invalidate all payment queries (this will match ['payments'], ['payments', { status: 'overdue' }], etc.)
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      // Invalidate computed extra allocations (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['payments', 'extra-allocations'] });
+      // Invalidate strategy queries (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'strategy'] });
+      // Invalidate all projection queries (this will match ['loans', 'projections', { strategyType }] for any strategyType)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'projections'] });
     };
 
     window.addEventListener('budget-updated', handleBudgetUpdate);
@@ -103,7 +83,59 @@ export function SummaryCards() {
     return () => {
       window.removeEventListener('budget-updated', handleBudgetUpdate);
     };
-  }, []);
+  }, [queryClient]);
+
+  // Compute summary data from query results
+  const summary = useMemo<SummaryData>(() => {
+    const loans = loansQuery.data ?? [];
+    const budget = budgetQuery.data ?? null;
+    const overduePayments = paymentsQuery.data ?? [];
+
+    const totalDebt = loans.reduce(
+      (sum, loan) => sum + Number(loan.currentBalance),
+      0
+    );
+    const monthlyObligation = calculateMonthlyObligation(loans);
+    const monthlyBudgetAmount = budget
+      ? Number(budget.monthlyAllocation)
+      : 0;
+    const availableExtraFunds = calculateAvailableExtraFunds(
+      monthlyBudgetAmount,
+      loans
+    );
+
+    // Find next payment due
+    const upcomingPayments = loans
+      .map((loan) => ({
+        date: loan.nextPaymentDueDate,
+        status: loan.paymentStatus,
+      }))
+      .filter((p) => p.status !== 'overdue')
+      .sort((a, b) => (a.date > b.date ? 1 : -1));
+
+    const nextPaymentDue =
+      upcomingPayments.length > 0 ? upcomingPayments[0].date : null;
+
+    // Calculate total interest (simplified - would need full calculation)
+    const totalInterest = loans.reduce(
+      (sum, loan) =>
+        sum +
+        (Number(loan.currentBalance) * Number(loan.interestRate)) / 100,
+      0
+    );
+
+    return {
+      totalDebt,
+      monthlyObligation,
+      monthlyBudget: monthlyBudgetAmount,
+      availableExtraFunds,
+      nextPaymentDue,
+      overdueCount: overduePayments.length,
+      totalInterest,
+    };
+  }, [loansQuery.data, budgetQuery.data, paymentsQuery.data]);
+
+  const loading = loansQuery.isLoading || budgetQuery.isLoading || paymentsQuery.isLoading;
 
   if (loading) {
     return (

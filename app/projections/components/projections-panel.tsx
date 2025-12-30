@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -24,20 +25,85 @@ interface ProjectionsData {
   };
 }
 
+interface StrategyResponse {
+  loans: any[];
+  strategyType: string | null;
+  projections: StrategyProjection;
+}
+
+// Query function to fetch strategy and loans
+async function fetchStrategy(): Promise<StrategyResponse> {
+  const response = await fetch('/api/loans/strategy');
+  if (!response.ok) {
+    throw new Error('Failed to fetch strategy');
+  }
+  return response.json();
+}
+
+// Query function to fetch projections
+async function fetchProjections(strategyType: string | null): Promise<ProjectionsData> {
+  const url = strategyType
+    ? `/api/loans/projections?strategy_type=${strategyType}`
+    : '/api/loans/projections';
+  
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache',
+    },
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch projections');
+  }
+  
+  return response.json();
+}
+
 export function ProjectionsPanel() {
-  const [projections, setProjections] = useState<ProjectionsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [strategyType, setStrategyType] = useState<string | null>(null);
-  const [loans, setLoans] = useState<any[]>([]);
+  const queryClient = useQueryClient();
 
+  // Fetch strategy and loans
+  const {
+    data: strategyData,
+    isLoading: strategyLoading,
+    error: strategyError,
+  } = useQuery({
+    queryKey: ['loans', 'strategy'],
+    queryFn: fetchStrategy,
+    staleTime: 60 * 1000, // 1 minute
+  });
+
+  // Extract strategy type from strategy data
+  const strategyType = strategyData?.strategyType ?? null;
+  const loans = strategyData?.loans ?? [];
+
+  // Fetch projections based on strategy type
+  const {
+    data: projections,
+    isLoading: projectionsLoading,
+    error: projectionsError,
+  } = useQuery({
+    queryKey: ['loans', 'projections', { strategyType }],
+    queryFn: () => fetchProjections(strategyType),
+    enabled: strategyData !== undefined, // Only fetch when strategy is loaded
+    staleTime: 60 * 1000, // 1 minute
+  });
+
+  // Listen for budget updates and invalidate queries
   useEffect(() => {
-    fetchStrategyAndProjections();
-
-    // Listen for budget updates
     const handleBudgetUpdate = () => {
-      console.log('Budget updated event received, refreshing projections...');
-      setLoading(true);
-      fetchStrategyAndProjections();
+      console.log('Budget updated event received, invalidating queries...');
+      // Invalidate budget queries (this will match ['budget', { active: true }] and all budget queries)
+      queryClient.invalidateQueries({ queryKey: ['budget'] });
+      // Invalidate loan queries (for consistency, as strategy/projections depend on loans)
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      // Invalidate strategy queries (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'strategy'] });
+      // Invalidate all projection queries (this will match ['loans', 'projections', { strategyType }] for any strategyType)
+      queryClient.invalidateQueries({ queryKey: ['loans', 'projections'] });
+      // Invalidate computed extra allocations (depends on loans and budget)
+      queryClient.invalidateQueries({ queryKey: ['payments', 'extra-allocations'] });
     };
 
     window.addEventListener('budget-updated', handleBudgetUpdate);
@@ -45,63 +111,10 @@ export function ProjectionsPanel() {
     return () => {
       window.removeEventListener('budget-updated', handleBudgetUpdate);
     };
-  }, []);
+  }, [queryClient]);
 
-  async function fetchStrategyAndProjections() {
-    try {
-      // First, get the current strategy
-      const strategyResponse = await fetch('/api/loans/strategy');
-      let currentStrategy: string | null = null;
-      
-      if (strategyResponse.ok) {
-        const strategyData = await strategyResponse.json();
-        // Store loans for lender name lookup
-        if (strategyData.loans && strategyData.loans.length > 0) {
-          setLoans(strategyData.loans);
-        }
-        // Get strategy from API response or from first loan
-        if (strategyData.strategyType !== undefined && strategyData.strategyType !== null) {
-          currentStrategy = strategyData.strategyType;
-        } else if (strategyData.loans && strategyData.loans.length > 0) {
-          // Check all loans for a strategy type (they should all have the same one)
-          const loanWithStrategy = strategyData.loans.find((loan: any) => loan.strategyType);
-          if (loanWithStrategy) {
-            currentStrategy = loanWithStrategy.strategyType;
-          }
-        }
-      }
-      
-      setStrategyType(currentStrategy);
-
-      // Then fetch projections with the strategy type
-      // Always pass strategy_type parameter, even if null
-      // Add timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      const projectionsUrl = `/api/loans/projections${currentStrategy ? `?strategy_type=${currentStrategy}&_t=${timestamp}` : `?_t=${timestamp}`}`;
-      
-      const response = await fetch(projectionsUrl, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Projections fetched:', {
-          strategyType: data.strategy?.strategyType,
-          totalMonths: data.strategy?.projections?.totalMonths,
-          totalInterest: data.strategy?.projections?.totalInterest,
-        });
-        setProjections(data);
-      } else {
-        console.error('Failed to fetch projections:', response.status, response.statusText);
-      }
-    } catch (error) {
-      console.error('Error fetching projections:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loading = strategyLoading || projectionsLoading;
+  const error = strategyError || projectionsError;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', {
@@ -130,6 +143,21 @@ export function ProjectionsPanel() {
         </CardHeader>
         <CardContent>
           <div className="h-64 bg-muted animate-pulse rounded" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Payoff Projections</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-destructive">
+            Error loading projections. Please try again.
+          </div>
         </CardContent>
       </Card>
     );
