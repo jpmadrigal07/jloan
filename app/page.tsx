@@ -1,9 +1,9 @@
-import { Button } from '@/components/ui/button'
+import { SummaryCards } from './components/summary-cards';
 
-export default function Home() {
+export default function Dashboard() {
   return (
-    <div>
-      <Button>Click me</Button>
+    <div className="container mx-auto py-8 space-y-8">
+      <SummaryCards />
     </div>
-  )
+  );
 }
