@@ -233,13 +233,13 @@ export function PaymentsOverview() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid':
-        return 'text-green-600';
+        return 'text-green-600 dark:text-green-400';
       case 'overdue':
-        return 'text-red-600';
+        return 'text-red-600 dark:text-red-400';
       case 'missed':
-        return 'text-red-800';
+        return 'text-red-800 dark:text-red-500';
       default:
-        return 'text-yellow-600';
+        return 'text-yellow-600 dark:text-yellow-400';
     }
   };
 
@@ -286,9 +286,9 @@ export function PaymentsOverview() {
   return (
     <div className="space-y-6">
       {overduePayments.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20">
           <CardHeader>
-            <CardTitle className="text-red-900">Overdue Payments</CardTitle>
+            <CardTitle className="text-red-900 dark:text-red-400">Overdue Payments</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -319,7 +319,7 @@ export function PaymentsOverview() {
                       </TableCell>
                       <TableCell>
                         {extraAllocation > 0.001 ? (
-                          <span className="text-green-600 font-medium">
+                          <span className="text-green-600 dark:text-green-400 font-medium">
                             {formatCurrency(extraAllocation)}
                           </span>
                         ) : (
@@ -395,7 +395,7 @@ export function PaymentsOverview() {
                       </TableCell>
                       <TableCell>
                         {extraAllocation > 0.001 ? (
-                          <span className="text-green-600 font-medium">
+                          <span className="text-green-600 dark:text-green-400 font-medium">
                             {formatCurrency(extraAllocation)}
                           </span>
                         ) : (
@@ -461,7 +461,7 @@ export function PaymentsOverview() {
                 <div className="text-sm text-muted-foreground mb-1">
                   Extra Payment Allocation
                 </div>
-                <div className="font-medium text-green-600">
+                <div className="font-medium text-green-600 dark:text-green-400">
                   {formatCurrency(modalData.extraAllocation)}
                 </div>
               </div>

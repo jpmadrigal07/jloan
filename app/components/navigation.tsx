@@ -8,10 +8,10 @@ import { StrategySelector } from './strategy-selector';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/loans', label: 'Loans', icon: CreditCard },
-  { href: '/budget', label: 'Monthly Budget', icon: Wallet },
-  { href: '/projections', label: 'Payoff Projections', icon: TrendingUp },
   { href: '/payments', label: 'Payments', icon: Calendar },
+  { href: '/budget', label: 'Monthly Budget', icon: Wallet },
+  { href: '/loans', label: 'Loans', icon: CreditCard },
+  { href: '/projections', label: 'Payoff Projections', icon: TrendingUp },
 ];
 
 export function Navigation() {
@@ -58,4 +58,3 @@ export function Navigation() {
     </nav>
   );
 }
-
