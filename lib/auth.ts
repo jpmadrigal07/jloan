@@ -34,8 +34,12 @@ export async function signToken(): Promise<string> {
 export async function verifyToken(token: string): Promise<JWTPayload> {
   try {
     const { payload } = await jwtVerify(token, secret);
-    return payload as JWTPayload;
-  } catch (error) {
+    // Validate payload structure matches our custom JWTPayload
+    if (typeof payload === 'object' && payload !== null && 'authenticated' in payload) {
+      return payload as unknown as JWTPayload;
+    }
+    throw new Error('Invalid token payload structure');
+  } catch (_error) {
     throw new Error('Invalid or expired token');
   }
 }
@@ -76,4 +80,3 @@ export function setAuthCookie(token: string): string {
 export function clearAuthCookie(): string {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 }
-
