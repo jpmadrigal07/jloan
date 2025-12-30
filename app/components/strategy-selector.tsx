@@ -1,21 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 
 type StrategyType = 'snowball' | 'avalanche' | 'custom' | null;
 
+function getStrategyLabel(strategyType: StrategyType): string {
+  if (strategyType === 'snowball') return 'Snowball Method';
+  if (strategyType === 'avalanche') return 'Avalanche Method';
+  if (strategyType === 'custom') return 'Custom Priority';
+  return 'Payment Strategy';
+}
+
 export function StrategySelector() {
   const [strategyType, setStrategyType] = useState<StrategyType>(null);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     fetchStrategy();
@@ -59,6 +68,7 @@ export function StrategySelector() {
         const data = await response.json();
         // Update state with the confirmed strategy from the server
         setStrategyType(data.strategyType);
+        setOpen(false);
         // Small delay to ensure database update is committed before reload
         setTimeout(() => {
           // Trigger a page refresh to update projections
@@ -79,89 +89,76 @@ export function StrategySelector() {
     }
   }
 
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment Strategy</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-32 bg-muted animate-pulse rounded" />
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Payment Strategy</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <RadioGroup
-          value={strategyType || ''}
-          onValueChange={(value) =>
-            handleStrategyChange(
-              value === '' ? null : (value as StrategyType)
-            )
-          }
-          className="space-y-4"
-        >
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="snowball" id="snowball" />
-            <Label htmlFor="snowball" className="cursor-pointer">
-              <div className="font-medium">Snowball Method</div>
-              <div className="text-sm text-muted-foreground">
-                Pay smallest balance first
-              </div>
-            </Label>
-          </div>
+    <>
+      <Button
+        variant="outline"
+        onClick={() => setOpen(true)}
+        disabled={loading}
+      >
+        {loading ? 'Loading...' : getStrategyLabel(strategyType)}
+      </Button>
 
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="avalanche" id="avalanche" />
-            <Label htmlFor="avalanche" className="cursor-pointer">
-              <div className="font-medium">Avalanche Method</div>
-              <div className="text-sm text-muted-foreground">
-                Pay highest interest rate first
-              </div>
-            </Label>
-          </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Payment Strategy</DialogTitle>
+            <DialogDescription>
+              Select a payment strategy to prioritize loan payments
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="custom" id="custom" />
-            <Label htmlFor="custom" className="cursor-pointer">
-              <div className="font-medium">Custom Priority</div>
-              <div className="text-sm text-muted-foreground">
-                Set your own priority order
-              </div>
-            </Label>
-          </div>
+          <RadioGroup
+            value={strategyType || ''}
+            onValueChange={(value) =>
+              handleStrategyChange(
+                value === '' ? null : (value as StrategyType)
+              )
+            }
+            className="space-y-4 mt-4"
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="snowball" id="snowball" />
+              <Label htmlFor="snowball" className="cursor-pointer">
+                <div className="font-medium">Snowball Method</div>
+                <div className="text-sm text-muted-foreground">
+                  Pay smallest balance first
+                </div>
+              </Label>
+            </div>
 
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="" id="none" />
-            <Label htmlFor="none" className="cursor-pointer">
-              <div className="font-medium">No Strategy</div>
-              <div className="text-sm text-muted-foreground">
-                Pay minimum payments only
-              </div>
-            </Label>
-          </div>
-        </RadioGroup>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="avalanche" id="avalanche" />
+              <Label htmlFor="avalanche" className="cursor-pointer">
+                <div className="font-medium">Avalanche Method</div>
+                <div className="text-sm text-muted-foreground">
+                  Pay highest interest rate first
+                </div>
+              </Label>
+            </div>
 
-        <div className="mt-4 p-3 bg-muted rounded text-sm">
-          <div className="font-medium mb-1">Current Strategy:</div>
-          <div className="text-muted-foreground">
-            {strategyType
-              ? strategyType === 'snowball'
-                ? 'Snowball Method'
-                : strategyType === 'avalanche'
-                  ? 'Avalanche Method'
-                  : 'Custom Priority'
-              : 'No Strategy Selected'}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="custom" id="custom" />
+              <Label htmlFor="custom" className="cursor-pointer">
+                <div className="font-medium">Custom Priority</div>
+                <div className="text-sm text-muted-foreground">
+                  Set your own priority order
+                </div>
+              </Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="" id="none" />
+              <Label htmlFor="none" className="cursor-pointer">
+                <div className="font-medium">No Strategy</div>
+                <div className="text-sm text-muted-foreground">
+                  Pay minimum payments only
+                </div>
+              </Label>
+            </div>
+          </RadioGroup>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
-
