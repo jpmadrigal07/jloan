@@ -12,8 +12,6 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const isActive = searchParams.get('is_active');
 
-    let query = db.select().from(loans);
-
     const conditions = [];
     if (sourceType) {
       conditions.push(eq(loans.sourceType, sourceType as 'bank' | 'mobile_app' | 'person'));
@@ -25,9 +23,9 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(loans.isActive, isActive === 'true'));
     }
 
-    if (conditions.length > 0) {
-      query = db.select().from(loans).where(and(...conditions));
-    }
+    const query = conditions.length > 0
+      ? db.select().from(loans).where(and(...conditions))
+      : db.select().from(loans);
 
     const allLoans = await query;
     return NextResponse.json(allLoans, { status: 200 });
@@ -52,13 +50,13 @@ export async function POST(request: NextRequest) {
         sourceType: validatedData.sourceType,
         lenderName: validatedData.lenderName,
         accountNumber: validatedData.accountNumber ?? null,
-        principalAmount: validatedData.principalAmount.toString(),
-        currentBalance: validatedData.currentBalance.toString(),
-        interestRate: validatedData.interestRate.toString(),
+        principalAmount: validatedData.principalAmount,
+        currentBalance: validatedData.currentBalance,
+        interestRate: validatedData.interestRate,
         loanTermMonths: validatedData.loanTermMonths,
         startDate: validatedData.startDate,
         paymentFrequency: validatedData.paymentFrequency,
-        minimumPayment: validatedData.minimumPayment.toString(),
+        minimumPayment: validatedData.minimumPayment,
         nextPaymentDueDate: validatedData.nextPaymentDueDate,
         paymentStatus: validatedData.paymentStatus,
         strategyType: validatedData.strategyType ?? null,
@@ -82,4 +80,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

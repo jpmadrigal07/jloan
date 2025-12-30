@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - staging
+      - develop
 
 jobs:
   release:
@@ -18,7 +18,7 @@ jobs:
           node-version: 22
 
       - run: corepack enable
-      - run: npm install --no-frozen-lockfile
+      - run: npm install
 
       - name: Semantic Release
         run: npx semantic-release

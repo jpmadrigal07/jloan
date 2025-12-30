@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const newBudget = await db
       .insert(monthlyBudget)
       .values({
-        monthlyAllocation: validatedData.monthlyAllocation.toString(),
+        monthlyAllocation: validatedData.monthlyAllocation,
         effectiveDate: validatedData.effectiveDate,
         isActive: validatedData.isActive ?? false,
         notes: validatedData.notes ?? null,
@@ -82,4 +82,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

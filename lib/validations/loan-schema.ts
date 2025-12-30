@@ -31,7 +31,7 @@ export const loanSchema = z.object({
   paymentStatus: z.enum(['current', 'upcoming', 'overdue']),
   strategyType: z.enum(['snowball', 'avalanche', 'custom']).optional().nullable(),
   priorityOrder: z.number().int().positive().optional().nullable(),
-  isActive: z.boolean().optional().default(true),
+  isActive: z.boolean(),
 });
 
 export const createLoanSchema = loanSchema;
