@@ -26,7 +26,12 @@ export function Navigation() {
             <div className="flex gap-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                // For payments, check if pathname starts with /payments
+                // For other routes, check exact match
+                const isActive =
+                  item.href === '/payments'
+                    ? pathname === item.href || pathname.startsWith('/payments/')
+                    : pathname === item.href;
                 return (
                   <Link
                     key={item.href}

@@ -76,11 +76,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update all loans with the new strategy type (can be null)
-    await db.update(loans).set({
-      strategyType: strategyType as 'snowball' | 'avalanche' | 'custom' | null,
-      updatedAt: new Date(),
-    });
+    // Update all active loans with the new strategy type (can be null)
+    await db
+      .update(loans)
+      .set({
+        strategyType: strategyType as 'snowball' | 'avalanche' | 'custom' | null,
+        updatedAt: new Date(),
+      })
+      .where(eq(loans.isActive, true));
 
     // If custom strategy, update priority orders
     if (strategyType === 'custom' && priorities && Array.isArray(priorities)) {

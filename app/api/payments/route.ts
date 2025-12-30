@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { upcomingPayments, loans } from '@/lib/db/schema';
 import { createPaymentSchema } from '@/lib/validations/payment-schema';
-import { eq, and, gte, lte } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, count, sql } from 'drizzle-orm';
 
 // GET /api/payments - Get upcoming payments (with loan details)
 export async function GET(request: NextRequest) {
@@ -11,15 +11,12 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
+    const hasPageParam = searchParams.has('page');
+    const hasLimitParam = searchParams.has('limit');
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '100', 10);
 
-    let query = db
-      .select({
-        payment: upcomingPayments,
-        loan: loans,
-      })
-      .from(upcomingPayments)
-      .innerJoin(loans, eq(upcomingPayments.loanId, loans.id));
-
+    // Build base query conditions
     const conditions = [];
     if (status) {
       conditions.push(
@@ -33,12 +30,68 @@ export async function GET(request: NextRequest) {
       conditions.push(lte(upcomingPayments.dueDate, endDate));
     }
 
+    // Get total count for pagination (count from payments table with same conditions)
+    let countQuery = db
+      .select({ count: count() })
+      .from(upcomingPayments);
+
+    // Build data query
+    let dataQuery = db
+      .select({
+        payment: upcomingPayments,
+        loan: loans,
+      })
+      .from(upcomingPayments)
+      .innerJoin(loans, eq(upcomingPayments.loanId, loans.id));
+
+    // Apply conditions to both queries
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      const whereClause = and(...conditions);
+      countQuery = countQuery.where(whereClause);
+      dataQuery = dataQuery.where(whereClause);
     }
 
-    const payments = await query;
+    // For paid payments, sort by paidDate descending (most recent first)
+    // For other statuses, sort by dueDate ascending
+    if (status === 'paid') {
+      dataQuery = dataQuery.orderBy(desc(upcomingPayments.paidDate));
+    } else {
+      dataQuery = dataQuery.orderBy(upcomingPayments.dueDate);
+    }
 
+    // Apply pagination if page and limit parameters are explicitly provided
+    if (hasPageParam && hasLimitParam && page > 0 && limit > 0) {
+      const offset = (page - 1) * limit;
+      dataQuery = dataQuery.limit(limit).offset(offset);
+    }
+
+    // Execute queries
+    const [totalResult, payments] = await Promise.all([
+      countQuery,
+      dataQuery,
+    ]);
+
+    const total = totalResult[0]?.count || 0;
+    const totalPages = hasLimitParam && limit > 0 ? Math.ceil(total / limit) : 1;
+
+    // If pagination parameters are explicitly provided, return paginated response
+    // Otherwise, return array format for backward compatibility
+    if (hasPageParam && hasLimitParam) {
+      return NextResponse.json(
+        {
+          data: payments,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // Backward compatibility: return array format
     return NextResponse.json(payments, { status: 200 });
   } catch (error) {
     console.error('Error fetching payments:', error);
