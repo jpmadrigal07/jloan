@@ -78,11 +78,15 @@ export async function POST(request: NextRequest) {
       if (loan.length > 0) {
         const currentBalance = Number(loan[0].currentBalance);
         const newBalance = Math.max(0, currentBalance - validatedData.amountPaid);
+        
+        // Check if loan is fully paid off
+        const isFullyPaid = newBalance <= 0.01;
 
         await db
           .update(loans)
           .set({
             currentBalance: newBalance.toString(),
+            isActive: !isFullyPaid, // Mark as inactive if fully paid
             updatedAt: new Date(),
           })
           .where(eq(loans.id, validatedData.loanId));
