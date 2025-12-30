@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/db/schema';
 import { signToken, setAuthCookie } from '@/lib/auth';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
     console.error('Error during login:', error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
+        { error: 'Validation error', details: error.issues },
         { status: 400 }
       );
     }
@@ -63,4 +62,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
