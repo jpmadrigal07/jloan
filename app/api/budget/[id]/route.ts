@@ -3,12 +3,19 @@ import { db } from '@/lib/db';
 import { monthlyBudget } from '@/lib/db/schema';
 import { updateBudgetSchema } from '@/lib/validations/budget-schema';
 import { eq } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // GET /api/budget/[id] - Get specific budget entry
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const budgetId = parseInt(id, 10);
@@ -48,6 +55,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const budgetId = parseInt(id, 10);
@@ -114,6 +127,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const budgetId = parseInt(id, 10);

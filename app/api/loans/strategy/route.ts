@@ -4,9 +4,16 @@ import { loans, monthlyBudget } from '@/lib/db/schema';
 import { applyStrategy } from '@/lib/strategy-helpers';
 import { calculateStrategyProjections } from '@/lib/loan-calculations';
 import { eq } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // GET /api/loans/strategy - Get loans ordered by current strategy
 export async function GET(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const strategyType = searchParams.get('strategy_type') as
@@ -61,6 +68,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/loans/strategy - Update strategy type and priorities
 export async function POST(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const body = await request.json();
     const { strategyType, priorities } = body;

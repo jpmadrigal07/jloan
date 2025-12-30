@@ -105,6 +105,14 @@ export const monthlyBudget = pgTable('monthly_budget', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Auth table
+export const auth = pgTable('auth', {
+  id: serial('id').primaryKey(),
+  password: varchar('password', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Relations
 export const loansRelations = relations(loans, ({ many }) => ({
   upcomingPayments: many(upcomingPayments),
@@ -129,3 +137,6 @@ export type NewUpcomingPayment = typeof upcomingPayments.$inferInsert;
 
 export type MonthlyBudget = typeof monthlyBudget.$inferSelect;
 export type NewMonthlyBudget = typeof monthlyBudget.$inferInsert;
+
+export type Auth = typeof auth.$inferSelect;
+export type NewAuth = typeof auth.$inferInsert;

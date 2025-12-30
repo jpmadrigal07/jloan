@@ -3,9 +3,16 @@ import { db } from '@/lib/db';
 import { upcomingPayments, loans } from '@/lib/db/schema';
 import { createPaymentSchema } from '@/lib/validations/payment-schema';
 import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // GET /api/payments - Get upcoming payments (with loan details)
 export async function GET(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
@@ -102,6 +109,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/payments - Record payment made
 export async function POST(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const body = await request.json();
     const validatedData = createPaymentSchema.parse(body);

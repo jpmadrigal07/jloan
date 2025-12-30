@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { loans, monthlyBudget } from '@/lib/db/schema';
 import { calculateStrategyProjections, calculateMonthlyObligation } from '@/lib/loan-calculations';
 import { eq } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,12 @@ export const revalidate = 0;
 
 // GET /api/loans/projections - Calculate payoff projections
 export async function GET(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     let strategyType = searchParams.get('strategy_type') as

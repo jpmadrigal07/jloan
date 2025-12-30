@@ -3,9 +3,16 @@ import { db } from '@/lib/db';
 import { loans } from '@/lib/db/schema';
 import { createLoanSchema } from '@/lib/validations/loan-schema';
 import { eq, and } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // GET /api/loans - Get all loans with optional filtering
 export async function GET(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const sourceType = searchParams.get('source_type');
@@ -40,6 +47,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/loans - Create a new loan
 export async function POST(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const body = await request.json();
     const validatedData = createLoanSchema.parse(body);

@@ -3,12 +3,19 @@ import { db } from '@/lib/db';
 import { loans } from '@/lib/db/schema';
 import { updateLoanSchema } from '@/lib/validations/loan-schema';
 import { eq } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // GET /api/loans/[id] - Get single loan details
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const loanId = parseInt(id, 10);
@@ -44,6 +51,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const loanId = parseInt(id, 10);
@@ -126,6 +139,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const loanId = parseInt(id, 10);
