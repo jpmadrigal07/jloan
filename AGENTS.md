@@ -757,6 +757,11 @@ export function Button({ variant, size, children }: ButtonProps) {
 6. **USE** TypeScript strict mode
 7. **AVOID** `any` type - use proper types or `unknown`
 8. **UPDATE** relevant `AGENTS.md` files whenever code structure, patterns, or conventions change (see [Documentation Maintenance](#-documentation-maintenance))
+9. **🚨 CRITICAL: Calculation Logic Verification**:
+   - ✅ **ALWAYS** run `bun run test:calc` after making changes to calculation logic
+   - ✅ **ALWAYS** verify calculation changes don't break expected results
+   - ✅ **REQUIRED** for changes in `lib/loan-calculations.ts` or any calculation-related code
+   - 💡 **Why**: Ensures loan payoff calculations, interest calculations, and time savings remain accurate
 
 ### Routing (Next.js App Router)
 
@@ -815,6 +820,16 @@ export function Button({ variant, size, children }: ButtonProps) {
 2. **USE** appropriate testing frameworks (Jest, React Testing Library)
 3. **TEST** API endpoints and services
 4. **MAINTAIN** test coverage for shared utilities
+5. **🚨 CRITICAL: Calculation Verification**:
+   - ✅ **ALWAYS** run `bun run test:calc` before committing changes to calculation logic
+   - ✅ **REQUIRED** when modifying:
+     - Loan payoff calculations (`lib/loan-calculations.ts`)
+     - Interest calculation logic
+     - Payment allocation strategies
+     - Time savings calculations
+     - Budget distribution logic
+   - ✅ The verification test ensures calculations match expected results from production data
+   - 💡 **Command**: `bun run test:calc` (or `node test-calculation-verification.js`)
 
 ---
 
@@ -850,6 +865,9 @@ bun run start
 
 # Lint code
 bun run lint
+
+# Test calculation logic
+bun run test:calc      # Verify loan calculation logic (REQUIRED after calculation changes)
 
 # Database commands
 bun run db:generate    # Generate migration files from schema
