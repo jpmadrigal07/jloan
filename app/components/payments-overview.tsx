@@ -23,8 +23,8 @@ interface Payment {
     id: number;
     loanId: number;
     dueDate: string;
-    amountDue: number;
-    amountPaid: number | null;
+    amountDue: number | string;
+    amountPaid: number | string | null;
     status: string;
     paidDate: string | null;
   };
@@ -57,8 +57,17 @@ export function PaymentsOverview() {
     }
   }
 
-  async function handleMarkPaid(paymentId: number, loanId: number, amountDue: number) {
+  async function handleMarkPaid(paymentId: number, loanId: number, amountDue: number | string) {
     try {
+      // Ensure amountDue is converted to a number
+      const amountPaid = typeof amountDue === 'string' ? parseFloat(amountDue) : amountDue;
+      
+      // Validate the converted amount
+      if (isNaN(amountPaid) || amountPaid <= 0) {
+        alert('Invalid payment amount. Please try again.');
+        return;
+      }
+      
       const response = await fetch(`/api/payments/${paymentId}`, {
         method: 'PUT',
         headers: {
@@ -66,7 +75,7 @@ export function PaymentsOverview() {
         },
         body: JSON.stringify({
           status: 'paid',
-          amountPaid: amountDue,
+          amountPaid: amountPaid,
           paidDate: new Date().toISOString().split('T')[0],
         }),
       });
@@ -75,6 +84,12 @@ export function PaymentsOverview() {
         fetchPayments();
         // Refresh loans to update balances
         window.location.reload();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error marking payment as paid:', errorData);
+        alert(
+          errorData.error || 'Failed to mark payment as paid. Please try again.'
+        );
       }
     } catch (error) {
       console.error('Error marking payment as paid:', error);
