@@ -6,7 +6,7 @@ export const budgetSchema = z.object({
     .positive('Monthly allocation must be positive')
     .finite(),
   effectiveDate: z.string().date('Invalid date format'),
-  isActive: z.boolean().optional().default(false),
+  isActive: z.boolean(),
   notes: z.string().optional().nullable(),
 });
 

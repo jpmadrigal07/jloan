@@ -38,8 +38,8 @@ export async function PUT(
     }
 
     const updateData: Record<string, unknown> = {};
-    if (validatedData.amountPaid !== undefined)
-      updateData.amountPaid = validatedData.amountPaid.toString();
+    if (validatedData.amountPaid !== undefined && validatedData.amountPaid !== null)
+      updateData.amountPaid = validatedData.amountPaid;
     if (validatedData.status !== undefined) updateData.status = validatedData.status;
     if (validatedData.paidDate !== undefined)
       updateData.paidDate = validatedData.paidDate;
@@ -66,14 +66,14 @@ export async function PUT(
       if (loan.length > 0) {
         const currentBalance = Number(loan[0].currentBalance);
         const newBalance = Math.max(0, currentBalance - validatedData.amountPaid);
-        
+
         // Check if loan is fully paid off
         const isFullyPaid = newBalance <= 0.01;
 
         await db
           .update(loans)
           .set({
-            currentBalance: newBalance.toString(),
+            currentBalance: newBalance,
             isActive: !isFullyPaid, // Mark as inactive if fully paid
             updatedAt: new Date(),
           })
@@ -137,4 +137,3 @@ export async function DELETE(
     );
   }
 }
-

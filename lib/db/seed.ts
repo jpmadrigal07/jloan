@@ -25,7 +25,7 @@ async function seed() {
     const [budget] = await db
       .insert(monthlyBudget)
       .values({
-        monthlyAllocation: '25000.00',
+        monthlyAllocation: 25000.00,
         effectiveDate: getDateString(-30),
         isActive: true,
         notes: 'Monthly salary allocation for debt payments',
@@ -43,13 +43,13 @@ async function seed() {
         sourceType: 'bank' as const,
         lenderName: 'BDO',
         accountNumber: 'BDO-123456789',
-        principalAmount: '500000.00',
-        currentBalance: '300000.00',
-        interestRate: '5.00',
+        principalAmount: 500000.00,
+        currentBalance: 300000.00,
+        interestRate: 5.00,
         loanTermMonths: 60,
         startDate: getDateString(-180), // 6 months ago
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '5000.00',
+        minimumPayment: 5000.00,
         nextPaymentDueDate: getDateString(5), // Due in 5 days
         paymentStatus: 'upcoming' as const,
         strategyType: null,
@@ -60,13 +60,13 @@ async function seed() {
         sourceType: 'bank' as const,
         lenderName: 'BPI',
         accountNumber: 'BPI-987654321',
-        principalAmount: '200000.00',
-        currentBalance: '150000.00',
-        interestRate: '6.50',
+        principalAmount: 200000.00,
+        currentBalance: 150000.00,
+        interestRate: 6.50,
         loanTermMonths: 36,
         startDate: getDateString(-120), // 4 months ago
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '6000.00',
+        minimumPayment: 6000.00,
         nextPaymentDueDate: getDateString(-5), // Overdue by 5 days
         paymentStatus: 'overdue' as const,
         strategyType: null,
@@ -77,13 +77,13 @@ async function seed() {
         sourceType: 'bank' as const,
         lenderName: 'Metrobank',
         accountNumber: 'MB-456789123',
-        principalAmount: '100000.00',
-        currentBalance: '45000.00',
-        interestRate: '4.75',
+        principalAmount: 100000.00,
+        currentBalance: 45000.00,
+        interestRate: 4.75,
         loanTermMonths: 24,
         startDate: getDateString(-90), // 3 months ago
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '3000.00',
+        minimumPayment: 3000.00,
         nextPaymentDueDate: getDateString(15), // Due in 15 days
         paymentStatus: 'current' as const,
         strategyType: null,
@@ -95,13 +95,13 @@ async function seed() {
         sourceType: 'mobile_app' as const,
         lenderName: 'GCash',
         accountNumber: 'GC-789123456',
-        principalAmount: '50000.00',
-        currentBalance: '25000.00',
-        interestRate: '12.00', // Higher interest
+        principalAmount: 50000.00,
+        currentBalance: 25000.00,
+        interestRate: 12.00, // Higher interest
         loanTermMonths: 12,
         startDate: getDateString(-60), // 2 months ago
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '4500.00',
+        minimumPayment: 4500.00,
         nextPaymentDueDate: getDateString(10), // Due in 10 days
         paymentStatus: 'current' as const,
         strategyType: null,
@@ -112,13 +112,13 @@ async function seed() {
         sourceType: 'mobile_app' as const,
         lenderName: 'Maya',
         accountNumber: 'MY-321654987',
-        principalAmount: '30000.00',
-        currentBalance: '18000.00',
-        interestRate: '15.00', // Highest interest
+        principalAmount: 30000.00,
+        currentBalance: 18000.00,
+        interestRate: 15.00, // Highest interest
         loanTermMonths: 6,
         startDate: getDateString(-30), // 1 month ago
         paymentFrequency: 'bi_weekly' as const,
-        minimumPayment: '3500.00',
+        minimumPayment: 3500.00,
         nextPaymentDueDate: getDateString(3), // Due in 3 days
         paymentStatus: 'upcoming' as const,
         strategyType: null,
@@ -129,13 +129,13 @@ async function seed() {
         sourceType: 'mobile_app' as const,
         lenderName: 'Tala',
         accountNumber: 'TL-147258369',
-        principalAmount: '20000.00',
-        currentBalance: '8500.00', // Smallest balance
-        interestRate: '18.00',
+        principalAmount: 20000.00,
+        currentBalance: 8500.00, // Smallest balance
+        interestRate: 18.00,
         loanTermMonths: 3,
         startDate: getDateString(-15), // 2 weeks ago
         paymentFrequency: 'weekly' as const,
-        minimumPayment: '3000.00',
+        minimumPayment: 3000.00,
         nextPaymentDueDate: getDateString(7), // Due in 7 days
         paymentStatus: 'current' as const,
         strategyType: null,
@@ -147,13 +147,13 @@ async function seed() {
         sourceType: 'person' as const,
         lenderName: 'John Santos',
         accountNumber: null,
-        principalAmount: '80000.00',
-        currentBalance: '60000.00',
-        interestRate: '3.00', // Lower interest (friendly rate)
+        principalAmount: 80000.00,
+        currentBalance: 60000.00,
+        interestRate: 3.00, // Lower interest (friendly rate)
         loanTermMonths: 48,
         startDate: getDateString(-200), // ~6.5 months ago
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '2000.00',
+        minimumPayment: 2000.00,
         nextPaymentDueDate: getDateString(20), // Due in 20 days
         paymentStatus: 'current' as const,
         strategyType: null,
@@ -164,13 +164,13 @@ async function seed() {
         sourceType: 'person' as const,
         lenderName: 'Maria Garcia',
         accountNumber: null,
-        principalAmount: '40000.00',
-        currentBalance: '12000.00',
-        interestRate: '5.50',
+        principalAmount: 40000.00,
+        currentBalance: 12000.00,
+        interestRate: 5.50,
         loanTermMonths: 18,
         startDate: getDateString(-100), // ~3 months ago
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '2500.00',
+        minimumPayment: 2500.00,
         nextPaymentDueDate: getDateString(12), // Due in 12 days
         paymentStatus: 'current' as const,
         strategyType: null,
@@ -182,13 +182,13 @@ async function seed() {
         sourceType: 'mobile_app' as const,
         lenderName: 'Cashalo',
         accountNumber: 'CA-999888777',
-        principalAmount: '15000.00',
-        currentBalance: '0.00',
-        interestRate: '10.00',
+        principalAmount: 15000.00,
+        currentBalance: 0.00,
+        interestRate: 10.00,
         loanTermMonths: 6,
         startDate: getDateString(-200),
         paymentFrequency: 'monthly' as const,
-        minimumPayment: '3000.00',
+        minimumPayment: 3000.00,
         nextPaymentDueDate: getDateString(30),
         paymentStatus: 'current' as const,
         strategyType: null,
@@ -208,7 +208,7 @@ async function seed() {
       {
         loanId: insertedLoans[1].id, // BPI (overdue loan)
         dueDate: getDateString(-5),
-        amountDue: '6000.00',
+        amountDue: 6000.00,
         amountPaid: null,
         status: 'overdue' as const,
         paidDate: null,
@@ -216,8 +216,8 @@ async function seed() {
       {
         loanId: insertedLoans[1].id, // BPI (overdue loan)
         dueDate: getDateString(-35),
-        amountDue: '6000.00',
-        amountPaid: '6000.00',
+        amountDue: 6000.00,
+        amountPaid: 6000.00,
         status: 'paid' as const,
         paidDate: getDateString(-33),
       },
@@ -225,7 +225,7 @@ async function seed() {
       {
         loanId: insertedLoans[0].id, // BDO
         dueDate: getDateString(5),
-        amountDue: '5000.00',
+        amountDue: 5000.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -233,7 +233,7 @@ async function seed() {
       {
         loanId: insertedLoans[2].id, // Metrobank
         dueDate: getDateString(15),
-        amountDue: '3000.00',
+        amountDue: 3000.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -241,7 +241,7 @@ async function seed() {
       {
         loanId: insertedLoans[3].id, // GCash
         dueDate: getDateString(10),
-        amountDue: '4500.00',
+        amountDue: 4500.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -249,7 +249,7 @@ async function seed() {
       {
         loanId: insertedLoans[4].id, // Maya
         dueDate: getDateString(3),
-        amountDue: '3500.00',
+        amountDue: 3500.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -257,7 +257,7 @@ async function seed() {
       {
         loanId: insertedLoans[5].id, // Tala
         dueDate: getDateString(7),
-        amountDue: '3000.00',
+        amountDue: 3000.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -265,7 +265,7 @@ async function seed() {
       {
         loanId: insertedLoans[6].id, // John Santos
         dueDate: getDateString(20),
-        amountDue: '2000.00',
+        amountDue: 2000.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -273,7 +273,7 @@ async function seed() {
       {
         loanId: insertedLoans[7].id, // Maria Garcia
         dueDate: getDateString(12),
-        amountDue: '2500.00',
+        amountDue: 2500.00,
         amountPaid: null,
         status: 'pending' as const,
         paidDate: null,
@@ -282,24 +282,24 @@ async function seed() {
       {
         loanId: insertedLoans[0].id, // BDO
         dueDate: getDateString(-25),
-        amountDue: '5000.00',
-        amountPaid: '5000.00',
+        amountDue: 5000.00,
+        amountPaid: 5000.00,
         status: 'paid' as const,
         paidDate: getDateString(-23),
       },
       {
         loanId: insertedLoans[2].id, // Metrobank
         dueDate: getDateString(-15),
-        amountDue: '3000.00',
-        amountPaid: '3000.00',
+        amountDue: 3000.00,
+        amountPaid: 3000.00,
         status: 'paid' as const,
         paidDate: getDateString(-13),
       },
       {
         loanId: insertedLoans[3].id, // GCash
         dueDate: getDateString(-20),
-        amountDue: '4500.00',
-        amountPaid: '4500.00',
+        amountDue: 4500.00,
+        amountPaid: 4500.00,
         status: 'paid' as const,
         paidDate: getDateString(-18),
       },
@@ -338,7 +338,7 @@ async function seed() {
 }
 
 // Run seed if called directly
-if (import.meta.main || process.argv[1]?.includes('seed.ts')) {
+if (process.argv[1]?.includes('seed.ts')) {
   seed()
     .then(() => {
       console.log('\n✅ Seeding complete!');
@@ -351,4 +351,3 @@ if (import.meta.main || process.argv[1]?.includes('seed.ts')) {
 }
 
 export { seed };
-
