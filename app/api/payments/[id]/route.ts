@@ -3,12 +3,19 @@ import { db } from '@/lib/db';
 import { upcomingPayments, loans } from '@/lib/db/schema';
 import { updatePaymentSchema } from '@/lib/validations/payment-schema';
 import { eq } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // PUT /api/payments/[id] - Update payment status
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const paymentId = parseInt(id, 10);
@@ -102,6 +109,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const { id } = await params;
     const paymentId = parseInt(id, 10);

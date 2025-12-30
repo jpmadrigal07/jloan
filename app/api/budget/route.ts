@@ -3,9 +3,16 @@ import { db } from '@/lib/db';
 import { monthlyBudget } from '@/lib/db/schema';
 import { createBudgetSchema } from '@/lib/validations/budget-schema';
 import { eq, desc } from 'drizzle-orm';
+import { requireAuth, unauthorizedResponse } from '@/lib/api-auth';
 
 // GET /api/budget - Get current active monthly budget
 export async function GET(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const activeOnly = searchParams.get('active') === 'true';
@@ -45,6 +52,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/budget - Create new monthly budget entry
 export async function POST(request: NextRequest) {
+  try {
+    await requireAuth(request);
+  } catch {
+    return unauthorizedResponse();
+  }
+
   try {
     const body = await request.json();
     const validatedData = createBudgetSchema.parse(body);
